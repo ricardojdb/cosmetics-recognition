@@ -1,4 +1,5 @@
-from tensorflow.keras.layers import Dense, Flatten, GlobalAveragePooling2D
+from tensorflow.keras.layers import Flatten, GlobalAveragePooling2D
+from tensorflow.keras.layers import Dense, Dropout
 from tensorflow.keras.models import Model
 
 def build_pretrained_model(

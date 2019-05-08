@@ -11,7 +11,7 @@ from sklearn import metrics
 import matplotlib.pyplot as plt
 import tensorflow as tf
 import numpy as np
-import itertools
+import pickle
 import time
 import cv2
 import os
@@ -27,6 +27,9 @@ def create_dataset(train_path, test_path=None, valid_size=0.1, batch_size=32):
     enc = LabelEncoder()
     enc.fit(y_train)
     print(enc.classes_)
+    
+    with open("models/label_enc.pkl", "wb") as f:
+        pickle.dump(enc, f)
 
     y_train = enc.transform(y_train)
     y_train = to_categorical(y_train)
@@ -97,7 +100,7 @@ def train(model, train_gen, valid_gen, test_gen,
     print('loss: {}'.format(test_loss))
 
     model_path = 'models/model_{}acc.h5'.format(int(test_acc*100))
-    model.save(model_path)
+    tf.keras.models.save_model(model, model_path)
 
     print("Successfully Saved {}".format(model_path))
 
