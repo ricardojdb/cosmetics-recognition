@@ -1,4 +1,4 @@
-from tensorflow.keras.applications.mobilenetv2 import MobileNetV2, preprocess_input
+from tensorflow.keras.applications.mobilenet_v2 import MobileNetV2, preprocess_input
 from tensorflow.keras.callbacks import TensorBoard
 from tensorflow.keras.preprocessing import image
 from tensorflow.keras.optimizers import Adam
@@ -49,6 +49,9 @@ def create_dataset(train_path, test_path=None, valid_size=0.1, batch_size=32):
 
     valid_gen.fit(X_val)
 
+    print("train: {}".format(len(y_train)))
+    print("valid: {}".format(len(y_val)))
+
     if test_path is not None:
         X_test, y_test = utils.read_data(
             data_path=test_path,
@@ -65,6 +68,8 @@ def create_dataset(train_path, test_path=None, valid_size=0.1, batch_size=32):
         train_gen = train_gen.flow(X_train, y_train, batch_size)
         valid_gen = valid_gen.flow(X_val, y_val, batch_size)
         test_gen = test_gen.flow(X_test, y_test, batch_size)
+        
+        print("test: {}".format(len(y_test)))
 
         return train_gen, valid_gen, test_gen
 
@@ -81,16 +86,11 @@ def train(model, train_gen, valid_gen, test_gen,
                   loss='categorical_crossentropy', 
                   metrics=['acc'])
     
-    tensorboard = TensorBoard(
-        log_dir='./logs/{}'.format(time.time()), 
-        update_freq='batch')
-
     model.fit_generator(
         generator=train_gen, 
         steps_per_epoch=train_steps,
         validation_data=valid_gen,
-        epochs=epochs, 
-        callbacks=[tensorboard])
+        epochs=epochs)
 
     test_loss, test_acc = model.evaluate_generator(test_gen)
     print('accuracy: {}'. format(test_acc))
@@ -119,10 +119,6 @@ if __name__ == "__main__":
         valid_size=0.1,
         batch_size=batch_size)
 
-    print("train: {}".format(len(train_gen)))
-    print("valid: {}".format(len(valid_gen)))
-    print("test: {}".format(len(test_gen)))
-
     base_model = MobileNetV2(
         input_shape=(224,224,3), 
         weights='imagenet', 
@@ -140,7 +136,7 @@ if __name__ == "__main__":
             if layer.name.startswith('block_{}'.format(i)):
                 layer.trainable = True
 
-    train_steps = np.ceil(len(train_gen)/batch_size)
+    train_steps = np.ceil(350/batch_size)
     train(model=model,
           train_gen=train_gen,
           valid_gen=valid_gen,

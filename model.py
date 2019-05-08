@@ -1,4 +1,3 @@
-from tensorflow.keras.applications.mobilenetv2 import MobileNetV2, preprocess_input
 from tensorflow.keras.layers import Dense, Flatten, GlobalAveragePooling2D
 from tensorflow.keras.models import Model
 
@@ -18,4 +17,4 @@ def build_pretrained_model(
     # this is the model we will train
     model = Model(inputs=base_model.input, outputs=preds)
     
-    return model, preprocess_input
+    return model
