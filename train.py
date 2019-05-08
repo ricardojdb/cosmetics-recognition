@@ -1,10 +1,8 @@
-from keras.applications.mobilenetv2 import MobileNetV2, preprocess_input, decode_predictions
-from keras.layers import Dense, Flatten, GlobalAveragePooling2D
-from keras.preprocessing import image
-from keras.optimizers import Adam
-from keras.callbacks import TensorBoard
-from keras.models import Model, load_model
-from keras.utils import to_categorical
+from tensorflow.keras.applications.mobilenetv2 import MobileNetV2, preprocess_input
+from tensorflow.keras.callbacks import TensorBoard
+from tensorflow.keras.preprocessing import image
+from tensorflow.keras.optimizers import Adam
+from tensorflow.keras.utils import to_categorical
 
 from sklearn.model_selection import train_test_split 
 from sklearn.preprocessing import LabelEncoder
@@ -18,162 +16,135 @@ import time
 import cv2
 import os
 
-import warnings
-warnings.filterwarnings("ignore")
+from model import build_pretrained_model
+import utils 
 
-def plot_confusion_matrix(cm, classes,
-                          normalize=False,
-                          title='Confusion matrix',
-                          cmap=plt.cm.Blues):
-    """
-    This function prints and plots the confusion matrix.
-    Normalization can be applied by setting `normalize=True`.
-    """
-    if normalize:
-        cm = cm.astype('float') / cm.sum(axis=1)[:, np.newaxis]
-    plt.imshow(cm, interpolation='nearest', cmap=cmap)
-    plt.title(title)
-    plt.colorbar()
-    tick_marks = np.arange(len(classes))
-    plt.xticks(tick_marks, classes, rotation=90)
-    plt.yticks(tick_marks, classes)
+def create_dataset(train_path, test_path=None, valid_size=0.1, batch_size=32):
+    X_train, X_val, y_train, y_val = utils.read_data(
+        data_path=train_path,
+        valid_size=valid_size)
 
-    thresh = cm.max() / 2.
-    for i, j in itertools.product(range(cm.shape[0]), range(cm.shape[1])):
-        plt.text(j, i, '{0:.2f}'.format(cm[i, j]),
-                 horizontalalignment="center",
-                 color="white" if cm[i, j] > thresh else "black")
+    enc = LabelEncoder()
+    enc.fit(y_train)
+    print(enc.classes_)
 
-    plt.tight_layout()
-    plt.ylabel('True label')
-    plt.xlabel('Predicted label')
-    return None
+    y_train = enc.transform(y_train)
+    y_train = to_categorical(y_train)
 
-def load_image(path):
-    x = cv2.imread(path)
-    x = cv2.cvtColor(x, cv2.COLOR_BGR2RGB)
-    x = cv2.resize(x, (224,224)).astype(np.float32)
-#     x = image.load_img(path, target_size=(224,224))
-#     x = image.img_to_array(x)
-    return x
+    train_gen = image.ImageDataGenerator(
+        preprocessing_function=preprocess_input,
+        width_shift_range=0.1,
+        height_shift_range=0.1,
+        shear_range=0.2,
+        zoom_range=0.2,
+        horizontal_flip=True)
 
-base_path = 'Data/images/'
-images_path = []
-labels = []
+    train_gen.fit(X_train)
 
-for path in os.listdir(base_path):
-    for img_path in os.listdir(os.path.join(base_path, path)):
-        images_path.append(os.path.join(base_path, path, img_path))
-        labels.append(path)
+    y_val = enc.transform(y_val)
+    y_val = to_categorical(y_val)
 
-train_paths, val_paths, train_labels, val_labels = train_test_split(images_path, labels, 
-                                                                      test_size=0.1, random_state=7, 
-                                                                      stratify=labels)
+    valid_gen = image.ImageDataGenerator(
+        preprocessing_function=preprocess_input)
 
+    valid_gen.fit(X_val)
 
-X_train = np.array([load_image(impath) for impath in train_paths])
-print('Training size: ', len(train_paths))
+    if test_path is not None:
+        X_test, y_test = utils.read_data(
+            data_path=test_path,
+            valid_size=0)
 
-X_val = np.array([preprocess_input(load_image(impath)) for impath in val_paths])
-print('Testing size: ', len(val_paths))
+        y_test = enc.transform(y_test)
+        y_test = to_categorical(y_test)
 
-X_train.shape
+        test_gen = image.ImageDataGenerator(
+            preprocessing_function=preprocess_input)
+        
+        test_gen.fit(X_test)
 
-train_gen = image.ImageDataGenerator(
-    width_shift_range=0.1,
-    height_shift_range=0.1,
-    shear_range=0.2,
-    zoom_range=0.2,
-    horizontal_flip=True,
-    preprocessing_function=preprocess_input)
+        train_gen = train_gen.flow(X_train, y_train, batch_size)
+        valid_gen = valid_gen.flow(X_val, y_val, batch_size)
+        test_gen = test_gen.flow(X_test, y_test, batch_size)
 
-train_gen.fit(X_train)
+        return train_gen, valid_gen, test_gen
 
-enc = LabelEncoder()
-enc.fit(train_labels)
-print(enc.classes_)
+    valid_gen = valid_gen.flow(X_val, y_val, batch_size)
+    test_gen = test_gen.flow(X_test, y_test, batch_size) 
 
-y_train = enc.transform(train_labels)
-y_train = to_categorical(y_train)
+    return train_gen, valid_gen
 
-y_val = enc.transform(val_labels)
-y_val = to_categorical(y_val)
+def train(model, train_gen, valid_gen, test_gen, 
+          train_steps, optim=Adam(lr=1e-4), 
+          epochs=30):
+    
+    model.compile(optimizer=optim, 
+                  loss='categorical_crossentropy', 
+                  metrics=['acc'])
+    
+    tensorboard = TensorBoard(
+        log_dir='./logs/{}'.format(time.time()), 
+        update_freq='batch')
 
-base_model = MobileNetV2(input_shape=(224,224,3), weights='imagenet', include_top=False)
+    model.fit_generator(
+        generator=train_gen, 
+        steps_per_epoch=train_steps,
+        validation_data=valid_gen,
+        epochs=epochs, 
+        callbacks=[tensorboard])
 
-# add a global spatial average pooling layer
-x = base_model.output
-x = GlobalAveragePooling2D()(x)
-# let's add a fully-connected layer
-x = Dense(1024, activation='relu')(x)
-# and a logistic layer -- let's say we have 200 classes
-predictions = Dense(6, activation='softmax')(x)
+    test_loss, test_acc = model.evaluate_generator(test_gen)
+    print('accuracy: {}'. format(test_acc))
+    print('loss: {}'.format(test_loss))
 
-# this is the model we will train
-model = Model(inputs=base_model.input, outputs=predictions)
+    model_path = 'models/model_{}acc.h5'.format(int(test_acc*100))
+    model.save(model_path)
 
-# first: train only the top layers (which were randomly initialized)
-# i.e. freeze all convolutional layers
-for layer in base_model.layers:
-    layer.trainable = False
+    print("Successfully Saved {}".format(model_path))
 
-for layer in base_model.layers:
-    for i in range(10,17,1):
-        if layer.name.startswith('block_{}'.format(i)):
-            layer.trainable = True
-
-model.compile(optimizer=Adam(lr=1e-4), loss='categorical_crossentropy', metrics=['acc'])
-
-batch_size = 32
-epochs = 20
-
-train_datagen = train_gen.flow(X_train, y_train, batch_size=batch_size)
-
-# model.fit(X_train, y_onehot, batch_size=batch_size, epochs=epochs)
-tensorboard = TensorBoard(log_dir='./logs/{}'.format(time.time()), update_freq='batch')
-
-history = model.fit_generator(
-    generator=train_datagen, 
-    steps_per_epoch=np.ceil(len(y_train)/batch_size),
-    validation_data=(X_val, y_val),
-    epochs=epochs, callbacks=[tensorboard])
+    return model
 
 
-img_test = load_image('Data/images_test/lipstick_a/IMG_20181011_144348.jpg')
-img_test = preprocess_input(img_test)
-img_test = np.expand_dims(img_test, 0)
+if __name__ == "__main__":
 
-pred = model.predict(img_test)
-print(enc.inverse_transform(np.argmax(pred)))
+    # HyperParameters
+    learning_rate = 1e-4
+    hidden_dim = 1024
+    batch_size = 32
+    n_classes = 6
+    epochs = 30
 
+    train_gen, valid_gen, test_gen = create_dataset(
+        train_path="data/train",
+        test_path="data/test",
+        valid_size=0.1,
+        batch_size=batch_size)
 
-# model.save('model-v2')
+    print("train: {}".format(len(train_gen)))
+    print("valid: {}".format(len(valid_gen)))
+    print("test: {}".format(len(test_gen)))
 
-test_path = r'Data/images_test/'
-test_images_path = []
-test_labels = []
+    base_model = MobileNetV2(
+        input_shape=(224,224,3), 
+        weights='imagenet', 
+        include_top=False)
 
-for path in os.listdir(test_path):
-    for img_path in os.listdir(os.path.join(test_path, path)):
-        test_images_path.append(os.path.join(test_path, path, img_path))
-        test_labels.append(path)
+    model =  build_pretrained_model(
+        base_model=base_model,
+        hidden_dim=hidden_dim,
+        n_classes=n_classes)
 
+    # first: train only the top layers 
+    for layer in base_model.layers:
+        layer.trainable = False
+        for i in range(10,17,1):
+            if layer.name.startswith('block_{}'.format(i)):
+                layer.trainable = True
 
-X_test = np.array([preprocess_input(load_image(impath)) for impath in test_images_path])
-print('Testing size: ', len(X_test))
-
-y_test = enc.transform(test_labels)
-y_test = to_categorical(y_test)
-
-l, a = model.evaluate(X_test, y_test)
-print('loss: {}  accuracy: {}'. format(l,a))
-
-
-y_test_pred = model.predict(X_test)
-y_test_pred_labels = enc.inverse_transform(np.argmax(y_test_pred,axis=1))
-
-y_test_labels = enc.inverse_transform(np.argmax(y_test, axis=1))
-
-cm = metrics.confusion_matrix(y_true=y_test_labels,y_pred=y_test_pred_labels, labels=enc.classes_)
-plt.figure()
-plot_confusion_matrix(cm, enc.classes_, normalize=False)
+    train_steps = np.ceil(len(train_gen)/batch_size)
+    train(model=model,
+          train_gen=train_gen,
+          valid_gen=valid_gen,
+          test_gen=test_gen,
+          train_steps=train_steps,
+          optim=Adam(lr=learning_rate), 
+          epochs=epochs)

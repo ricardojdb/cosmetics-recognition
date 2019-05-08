@@ -1,3 +1,4 @@
+from sklearn.model_selection import train_test_split 
 import matplotlib.pyplot as plt
 import numpy as np
 import itertools
@@ -10,16 +11,27 @@ def load_image(path):
     x = cv2.resize(x, (224,224)).astype(np.float32)
     return x
 
-def read_data(data_path):
-    images_path = []
+def read_data(data_path, valid_size=0.0):
+    path_images = []
     labels = []
 
     for path in os.listdir(data_path):
         for img_path in os.listdir(os.path.join(data_path, path)):
-            images_path.append(os.path.join(data_path, path, img_path))
+            path_images.append(os.path.join(data_path, path, img_path))
             labels.append(path)
+    
+    images = np.array([load_image(impath) for impath in path_images])
 
-    return images_path, labels
+    if valid_size != 0.0:
+        X_train, X_val, y_train, y_val = train_test_split(
+            images, labels, 
+            test_size=valid_size, 
+            random_state=7, 
+            stratify=labels)
+
+        return X_train, X_val, y_train, y_val
+
+    return images, labels
 
 def plot_confusion_matrix(cm, classes,
                           normalize=False,
