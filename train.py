@@ -82,8 +82,8 @@ def create_dataset(train_path, test_path=None, valid_size=0.1, batch_size=32):
     return train_gen, valid_gen
 
 def train(model, train_gen, valid_gen, test_gen, 
-          train_steps, optim=Adam(lr=1e-4), 
-          epochs=30):
+          train_steps, valid_steps, 
+          optim=Adam(lr=1e-4), epochs=30):
     
     model.compile(optimizer=optim, 
                   loss='categorical_crossentropy', 
@@ -93,6 +93,7 @@ def train(model, train_gen, valid_gen, test_gen,
         generator=train_gen, 
         steps_per_epoch=train_steps,
         validation_data=valid_gen,
+        validation_steps=valid_steps,
         epochs=epochs)
 
     test_loss, test_acc = model.evaluate_generator(test_gen)
@@ -132,18 +133,21 @@ if __name__ == "__main__":
         hidden_dim=hidden_dim,
         n_classes=n_classes)
 
-    # first: train only the top layers 
+    # train only the top layers 
     for layer in base_model.layers:
         layer.trainable = False
         for i in range(10,17,1):
             if layer.name.startswith('block_{}'.format(i)):
                 layer.trainable = True
 
-    train_steps = np.ceil(350/batch_size)
+    train_steps = np.ceil(train_gen.n/batch_size)
+    valid_steps = np.ceil(valid_gen.n/batch_size)
+
     train(model=model,
-          train_gen=train_gen,
-          valid_gen=valid_gen,
-          test_gen=test_gen,
-          train_steps=train_steps,
-          optim=Adam(lr=learning_rate), 
-          epochs=epochs)
+        train_gen=train_gen,
+        valid_gen=valid_gen,
+        test_gen=test_gen,
+        train_steps=train_steps,
+        valid_steps=valid_steps,
+        optim=Adam(lr=learning_rate), 
+        epochs=epochs)

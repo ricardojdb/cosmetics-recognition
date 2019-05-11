@@ -21,6 +21,7 @@ def read_data(data_path, valid_size=0.0):
             labels.append(path)
     
     images = np.array([load_image(impath) for impath in path_images])
+    labels = np.array(labels)
 
     if valid_size != 0.0:
         X_train, X_val, y_train, y_val = train_test_split(
