@@ -1,10 +1,11 @@
-from tensorflow.keras.applications.mobilenet_v2 import MobileNetV2, preprocess_input
+from tensorflow.keras.applications.mobilenet_v2 import MobileNetV2, \
+    preprocess_input
 from tensorflow.keras.callbacks import TensorBoard
 from tensorflow.keras.preprocessing import image
 from tensorflow.keras.optimizers import Adam
 from tensorflow.keras.utils import to_categorical
 
-from sklearn.model_selection import train_test_split 
+from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import LabelEncoder
 from sklearn import metrics
 
@@ -17,7 +18,8 @@ import cv2
 import os
 
 from model import build_pretrained_model
-import utils 
+import utils
+
 
 def create_dataset(train_path, test_path=None, valid_size=0.1, batch_size=32):
     X_train, X_val, y_train, y_val = utils.read_data(
@@ -27,7 +29,7 @@ def create_dataset(train_path, test_path=None, valid_size=0.1, batch_size=32):
     enc = LabelEncoder()
     enc.fit(y_train)
     print(enc.classes_)
-    
+
     with open("models/label_enc.pkl", "wb") as f:
         pickle.dump(enc, f)
 
@@ -65,32 +67,33 @@ def create_dataset(train_path, test_path=None, valid_size=0.1, batch_size=32):
 
         test_gen = image.ImageDataGenerator(
             preprocessing_function=preprocess_input)
-        
+
         test_gen.fit(X_test)
 
         train_gen = train_gen.flow(X_train, y_train, batch_size)
         valid_gen = valid_gen.flow(X_val, y_val, batch_size)
         test_gen = test_gen.flow(X_test, y_test, batch_size)
-        
+
         print("test: {}".format(len(y_test)))
 
         return train_gen, valid_gen, test_gen
 
     valid_gen = valid_gen.flow(X_val, y_val, batch_size)
-    test_gen = test_gen.flow(X_test, y_test, batch_size) 
+    test_gen = test_gen.flow(X_test, y_test, batch_size)
 
     return train_gen, valid_gen
 
-def train(model, train_gen, valid_gen, test_gen, 
-          train_steps, valid_steps, 
+
+def train(model, train_gen, valid_gen, test_gen,
+          train_steps, valid_steps,
           optim=Adam(lr=1e-4), epochs=30):
-    
-    model.compile(optimizer=optim, 
-                  loss='categorical_crossentropy', 
+
+    model.compile(optimizer=optim,
+                  loss='categorical_crossentropy',
                   metrics=['acc'])
-    
+
     model.fit_generator(
-        generator=train_gen, 
+        generator=train_gen,
         steps_per_epoch=train_steps,
         validation_data=valid_gen,
         validation_steps=valid_steps,
@@ -124,19 +127,19 @@ if __name__ == "__main__":
         batch_size=batch_size)
 
     base_model = MobileNetV2(
-        input_shape=(224,224,3), 
-        weights='imagenet', 
+        input_shape=(224, 224, 3),
+        weights='imagenet',
         include_top=False)
 
-    model =  build_pretrained_model(
+    model = build_pretrained_model(
         base_model=base_model,
         hidden_dim=hidden_dim,
         n_classes=n_classes)
 
-    # train only the top layers 
+    # train only the top layers
     for layer in base_model.layers:
         layer.trainable = False
-        for i in range(10,17,1):
+        for i in range(10, 17, 1):
             if layer.name.startswith('block_{}'.format(i)):
                 layer.trainable = True
 
@@ -144,10 +147,10 @@ if __name__ == "__main__":
     valid_steps = np.ceil(valid_gen.n/batch_size)
 
     train(model=model,
-        train_gen=train_gen,
-        valid_gen=valid_gen,
-        test_gen=test_gen,
-        train_steps=train_steps,
-        valid_steps=valid_steps,
-        optim=Adam(lr=learning_rate), 
-        epochs=epochs)
+          train_gen=train_gen,
+          valid_gen=valid_gen,
+          test_gen=test_gen,
+          train_steps=train_steps,
+          valid_steps=valid_steps,
+          optim=Adam(lr=learning_rate),
+          epochs=epochs)

@@ -1,15 +1,17 @@
-from sklearn.model_selection import train_test_split 
+from sklearn.model_selection import train_test_split
 import matplotlib.pyplot as plt
 import numpy as np
 import itertools
 import cv2
 import os
 
+
 def load_image(path):
     x = cv2.imread(path)
     x = cv2.cvtColor(x, cv2.COLOR_BGR2RGB)
-    x = cv2.resize(x, (224,224)).astype(np.float32)
+    x = cv2.resize(x, (224, 224)).astype(np.float32)
     return x
+
 
 def read_data(data_path, valid_size=0.0):
     path_images = []
@@ -19,20 +21,21 @@ def read_data(data_path, valid_size=0.0):
         for img_path in os.listdir(os.path.join(data_path, path)):
             path_images.append(os.path.join(data_path, path, img_path))
             labels.append(path)
-    
+
     images = np.array([load_image(impath) for impath in path_images])
     labels = np.array(labels)
 
     if valid_size != 0.0:
         X_train, X_val, y_train, y_val = train_test_split(
-            images, labels, 
-            test_size=valid_size, 
-            random_state=7, 
+            images, labels,
+            test_size=valid_size,
+            random_state=7,
             stratify=labels)
 
         return X_train, X_val, y_train, y_val
 
     return images, labels
+
 
 def plot_confusion_matrix(cm, classes,
                           normalize=False,
@@ -66,6 +69,7 @@ def plot_confusion_matrix(cm, classes,
     plt.ylabel('True label')
     plt.xlabel('Predicted label')
     return None
+
 
 def standard_scaler(x):
     return (x - np.min(x)) / (np.max(x) - np.min(x))
