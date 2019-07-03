@@ -4,6 +4,7 @@ import numpy as np
 import itertools
 import cv2
 import os
+import glob
 
 
 def load_image(path):
@@ -17,10 +18,20 @@ def read_data(data_path, valid_size=0.0):
     path_images = []
     labels = []
 
+    """
     for path in os.listdir(data_path):
+        print(path)
         for img_path in os.listdir(os.path.join(data_path, path)):
             path_images.append(os.path.join(data_path, path, img_path))
             labels.append(path)
+
+    """
+    
+    for textname in glob.iglob(data_path + '/**/*.jpg', recursive=True):
+        labels.append(
+            textname.split(data_path + "/")[-1].split('/')[0]
+        )
+        path_images.append(textname)
 
     images = np.array([load_image(impath) for impath in path_images])
     labels = np.array(labels)
